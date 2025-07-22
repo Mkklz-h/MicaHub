@@ -161,13 +161,13 @@ end
 
 function LoadingScreen:SetSteps(steps)
     self.customSteps = steps or {
-        {10, "Conectando ao servidor..."},
-        {25, "Carregando recursos..."},
-        {40, "Inicializando sistemas..."},
-        {60, "Carregando interface..."},
-        {80, "Aplicando configurações..."},
-        {95, "Finalizando..."},
-        {100, "Concluído!"}
+        {10, "MICAHUB/TORAISME"},
+        {25, "MICAHUB/TORAISME"},
+        {40, "MICAHUB/TORAISME"},
+        {60, "MICAHUB/TORAISME"},
+        {80, "MICAHUB/TORAISME"},
+        {95, "MICAHUB/TORAISME"},
+        {100, "MICAHUB/TORAISME"}
     }
     return self
 end

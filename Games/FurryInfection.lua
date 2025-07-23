@@ -54,6 +54,8 @@ Window:AddToggle({
 				self.inputConnection = nil
 				self.jumpConnection = nil
 				self.characterConnection = nil
+				self.currentHighlight = nil
+				self.highlightUpdateConnection = nil
 				return self
 			end
 
@@ -82,7 +84,42 @@ Window:AddToggle({
 				return true
 			end
 
-			function BackstabSystem:findNearestTarget()
+			function BackstabSystem:createHighlight(player)
+				if self.currentHighlight then
+					self.currentHighlight:Destroy()
+					self.currentHighlight = nil
+				end
+				
+				if not player or not player.Character then return end
+				
+				local highlight = Instance.new("Highlight")
+				highlight.Parent = player.Character
+				highlight.FillColor = Color3.fromRGB(255, 0, 0)
+				highlight.OutlineColor = Color3.fromRGB(255, 0, 0)
+				highlight.FillTransparency = 0.5
+				highlight.OutlineTransparency = 0
+				
+				self.currentHighlight = highlight
+			end
+
+			function BackstabSystem:removeHighlight()
+				if self.currentHighlight then
+					self.currentHighlight:Destroy()
+					self.currentHighlight = nil
+				end
+			end
+
+			function BackstabSystem:updateHighlight()
+				local nearestTarget = self:findNearestTarget()
+				
+				if nearestTarget then
+					if not self.currentHighlight or self.currentHighlight.Parent ~= nearestTarget.Character then
+						self:createHighlight(nearestTarget)
+					end
+				else
+					self:removeHighlight()
+				end
+			end
 				local myRoot = self:getCharacterRootPart()
 				if not myRoot then return nil end
 				
@@ -114,6 +151,7 @@ Window:AddToggle({
 					self.targetConnection = nil
 				end
 				
+				self:removeHighlight()
 				self.currentTarget = nil
 				self.isAttaching = false
 			end
@@ -135,6 +173,13 @@ Window:AddToggle({
 					self.characterConnection:Disconnect()
 					self.characterConnection = nil
 				end
+				
+				if self.highlightUpdateConnection then
+					self.highlightUpdateConnection:Disconnect()
+					self.highlightUpdateConnection = nil
+				end
+				
+				self:removeHighlight()
 			end
 
 			function BackstabSystem:validateAttachment()
@@ -254,6 +299,7 @@ Window:AddToggle({
 				local target = self:findNearestTarget()
 				if not target then return end
 				
+				self:removeHighlight()
 				self:attachToTarget(target)
 			end
 
@@ -271,6 +317,12 @@ Window:AddToggle({
 				
 				self.characterConnection = LocalPlayer.CharacterRemoving:Connect(function()
 					self:cleanup()
+				end)
+				
+				self.highlightUpdateConnection = RunService.Heartbeat:Connect(function()
+					if not self.isAttaching then
+						self:updateHighlight()
+					end
 				end)
 			end
 

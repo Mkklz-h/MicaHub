@@ -211,13 +211,14 @@ Window:AddToggle({
 			
 			local function setupDoubleJump(character)
 				local humanoid = character:WaitForChild("Humanoid")
-				local jumpsLeft = 10
+				local airJumps = 0
+				local maxAirJumps = 10
 				local lastJumpTime = 0
 				local jumpCooldown = 0.1
 				
 				local stateConnection = humanoid.StateChanged:Connect(function(old, new)
 					if new == Enum.HumanoidStateType.Landed then
-						jumpsLeft = 10
+						airJumps = 0
 					end
 				end)
 				
@@ -225,10 +226,10 @@ Window:AddToggle({
 					if gameProcessed or not DoubleJumpEnabled then return end
 					if input.KeyCode == Enum.KeyCode.Space then
 						local currentTime = tick()
-						if jumpsLeft > 0 and (currentTime - lastJumpTime) >= jumpCooldown then
+						if currentTime - lastJumpTime > jumpCooldown and airJumps < maxAirJumps then
 							if humanoid:GetState() ~= Enum.HumanoidStateType.Landed then
 								humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-								jumpsLeft = jumpsLeft - 1
+								airJumps = airJumps + 1
 								lastJumpTime = currentTime
 							end
 						end
@@ -238,10 +239,10 @@ Window:AddToggle({
 				local jumpConnection = UserInputService.JumpRequest:Connect(function()
 					if not DoubleJumpEnabled then return end
 					local currentTime = tick()
-					if jumpsLeft > 0 and (currentTime - lastJumpTime) >= jumpCooldown then
+					if currentTime - lastJumpTime > jumpCooldown and airJumps < maxAirJumps then
 						if humanoid:GetState() ~= Enum.HumanoidStateType.Landed then
 							humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-							jumpsLeft = jumpsLeft - 1
+							airJumps = airJumps + 1
 							lastJumpTime = currentTime
 						end
 					end

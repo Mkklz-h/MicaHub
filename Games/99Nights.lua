@@ -4,6 +4,7 @@ local Window = Library:CreateWindow("MicaHub")
 local WalkSpeedEnabled = false
 local FpsBoosterEnabled = false
 local InstantChestEnabled = false
+local DoubleJumpEnabled = false
 
 local Registro = getreg()
 local Blocklist = {"kick", "ban"}
@@ -112,7 +113,7 @@ Window:AddButton({
 					obj:Destroy()
 				end
 				
-				if obj.Name == "Foliage" or obj.Name == "Bunny Burrow" then
+				if obj.Name == "Foliage" or obj.Name == "Bunny Burrow" or obj.Name == "Boundaries" then
 					obj:Destroy()
 					return
 				end
@@ -176,7 +177,7 @@ Window:AddButton({
 			end)
 			
 			workspace.ChildAdded:Connect(function(child)
-				if child.Name == "Foliage" or child.Name == "Bunny Burrow" then
+				if child.Name == "Foliage" or child.Name == "Bunny Burrow" or child.Name == "Boundaries" then
 					child:Destroy()
 				else
 					changeMaterialAndRemoveTextures(child)
@@ -184,7 +185,7 @@ Window:AddButton({
 			end)
 			
 			workspace.DescendantAdded:Connect(function(descendant)
-				if descendant.Name == "Foliage" or descendant.Name == "Bunny Burrow" then
+				if descendant.Name == "Foliage" or descendant.Name == "Bunny Burrow" or descendant.Name == "Boundaries" then
 					descendant:Destroy()
 				elseif descendant:IsA("BasePart") then
 					descendant.Material = Enum.Material.Plastic
@@ -202,6 +203,67 @@ Window:AddToggle({
 	text = "Double Jump",
 	flag = "toggle",
 	callback = function(v)
+		DoubleJumpEnabled = v
+		
+		if v then
+			local player = game.Players.LocalPlayer
+			local UserInputService = game:GetService("UserInputService")
+			
+			local function setupDoubleJump(character)
+				local humanoid = character:WaitForChild("Humanoid")
+				local jumpsLeft = 10
+				local lastJumpTime = 0
+				local jumpCooldown = 0.1
+				
+				local stateConnection = humanoid.StateChanged:Connect(function(old, new)
+					if new == Enum.HumanoidStateType.Landed then
+						jumpsLeft = 10
+					end
+				end)
+				
+				local inputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+					if gameProcessed or not DoubleJumpEnabled then return end
+					if input.KeyCode == Enum.KeyCode.Space then
+						local currentTime = tick()
+						if jumpsLeft > 0 and (currentTime - lastJumpTime) >= jumpCooldown then
+							if humanoid:GetState() ~= Enum.HumanoidStateType.Landed then
+								humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+								jumpsLeft = jumpsLeft - 1
+								lastJumpTime = currentTime
+							end
+						end
+					end
+				end)
+				
+				local jumpConnection = UserInputService.JumpRequest:Connect(function()
+					if not DoubleJumpEnabled then return end
+					local currentTime = tick()
+					if jumpsLeft > 0 and (currentTime - lastJumpTime) >= jumpCooldown then
+						if humanoid:GetState() ~= Enum.HumanoidStateType.Landed then
+							humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+							jumpsLeft = jumpsLeft - 1
+							lastJumpTime = currentTime
+						end
+					end
+				end)
+				
+				character.AncestryChanged:Connect(function()
+					if stateConnection then stateConnection:Disconnect() end
+					if inputConnection then inputConnection:Disconnect() end
+					if jumpConnection then jumpConnection:Disconnect() end
+				end)
+			end
+			
+			if player.Character then
+				setupDoubleJump(player.Character)
+			end
+			
+			player.CharacterAdded:Connect(function(character)
+				if DoubleJumpEnabled then
+					setupDoubleJump(character)
+				end
+			end)
+		end
 	end
 })
 

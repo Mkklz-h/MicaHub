@@ -207,7 +207,7 @@ Window:AddToggle({
 		local function setSuperJump(enabled)
 			if player.Character and player.Character:FindFirstChild("Humanoid") then
 				if enabled then
-					player.Character.Humanoid.JumpPower = 120
+					player.Character.Humanoid.JumpPower = 500
 				else
 					player.Character.Humanoid.JumpPower = 50
 				end
@@ -219,7 +219,7 @@ Window:AddToggle({
 		if v then
 			player.CharacterAdded:Connect(function(character)
 				character:WaitForChild("Humanoid")
-				character.Humanoid.JumpPower = 120
+				character.Humanoid.JumpPower = 500
 			end)
 		end
 	end

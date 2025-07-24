@@ -4,7 +4,6 @@ local Window = Library:CreateWindow("MicaHub")
 local WalkSpeedEnabled = false
 local FpsBoosterEnabled = false
 local InstantChestEnabled = false
-local DoubleJumpEnabled = false
 
 local Registro = getreg()
 local Blocklist = {"kick", "ban"}
@@ -200,69 +199,27 @@ Window:AddButton({
 })
 
 Window:AddToggle({
-	text = "Double Jump",
+	text = "Super Jump",
 	flag = "toggle",
 	callback = function(v)
-		DoubleJumpEnabled = v
+		local player = game.Players.LocalPlayer
+		
+		local function setSuperJump(enabled)
+			if player.Character and player.Character:FindFirstChild("Humanoid") then
+				if enabled then
+					player.Character.Humanoid.JumpPower = 120
+				else
+					player.Character.Humanoid.JumpPower = 50
+				end
+			end
+		end
+		
+		setSuperJump(v)
 		
 		if v then
-			local player = game.Players.LocalPlayer
-			local UserInputService = game:GetService("UserInputService")
-			
-			local function setupDoubleJump(character)
-				local humanoid = character:WaitForChild("Humanoid")
-				local airJumps = 0
-				local maxAirJumps = 10
-				local lastJumpTime = 0
-				local jumpCooldown = 0.1
-				
-				local stateConnection = humanoid.StateChanged:Connect(function(old, new)
-					if new == Enum.HumanoidStateType.Landed then
-						airJumps = 0
-					end
-				end)
-				
-				local inputConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
-					if gameProcessed or not DoubleJumpEnabled then return end
-					if input.KeyCode == Enum.KeyCode.Space then
-						local currentTime = tick()
-						if currentTime - lastJumpTime > jumpCooldown and airJumps < maxAirJumps then
-							if humanoid:GetState() ~= Enum.HumanoidStateType.Landed then
-								humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-								airJumps = airJumps + 1
-								lastJumpTime = currentTime
-							end
-						end
-					end
-				end)
-				
-				local jumpConnection = UserInputService.JumpRequest:Connect(function()
-					if not DoubleJumpEnabled then return end
-					local currentTime = tick()
-					if currentTime - lastJumpTime > jumpCooldown and airJumps < maxAirJumps then
-						if humanoid:GetState() ~= Enum.HumanoidStateType.Landed then
-							humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
-							airJumps = airJumps + 1
-							lastJumpTime = currentTime
-						end
-					end
-				end)
-				
-				character.AncestryChanged:Connect(function()
-					if stateConnection then stateConnection:Disconnect() end
-					if inputConnection then inputConnection:Disconnect() end
-					if jumpConnection then jumpConnection:Disconnect() end
-				end)
-			end
-			
-			if player.Character then
-				setupDoubleJump(player.Character)
-			end
-			
 			player.CharacterAdded:Connect(function(character)
-				if DoubleJumpEnabled then
-					setupDoubleJump(character)
-				end
+				character:WaitForChild("Humanoid")
+				character.Humanoid.JumpPower = 120
 			end)
 		end
 	end

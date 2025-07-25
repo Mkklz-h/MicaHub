@@ -13,8 +13,10 @@ MicaHub.FpsBoosterEnabled = false
 MicaHub.InstantChestEnabled = false
 MicaHub.SearchItemsEnabled = false
 MicaHub.ProcessingItem = false
+MicaHub.CurrentItemTimeout = nil
 
-MicaHub.ItemTypes = {"Coal", "Fuel Canister"}
+MicaHub.MainFireList = {"Coal", "Fuel Canister"}
+MicaHub.ScrapperList = {"Sheet Metal", "Log", "UFO Scrap"}
 
 MicaHub.new = function()
     local self = setmetatable({}, MicaHub)
@@ -114,6 +116,17 @@ MicaHub.EnableFpsBooster = function(self)
     end)
 end
 
+MicaHub.IsValidItem = function(self, itemName)
+    for _, item in pairs(self.MainFireList) do
+        if item == itemName then return true end
+    end
+    
+    for _, item in pairs(self.ScrapperList) do
+        if item == itemName then return true end
+    end
+    
+    return false
+end
 MicaHub.GetRandomAvailableItem = function(self)
     local items = workspace:FindFirstChild("Items")
     if not items then return nil end
@@ -121,10 +134,8 @@ MicaHub.GetRandomAvailableItem = function(self)
     local availableItems = {}
     
     for _, item in pairs(items:GetChildren()) do
-        for _, itemType in pairs(self.ItemTypes) do
-            if item.Name == itemType then
-                table.insert(availableItems, item)
-            end
+        if item and item.Parent and self:IsValidItem(item.Name) then
+            table.insert(availableItems, item)
         end
     end
     
@@ -135,43 +146,106 @@ MicaHub.GetRandomAvailableItem = function(self)
 end
 
 MicaHub.InteractWithItem = function(self, item)
+    if not item or not item.Parent then return end
+    
     local remoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
     
-    local startArgs = {item}
-    remoteEvents:WaitForChild("RequestStartDraggingItem"):FireServer(unpack(startArgs))
-    wait(0.1)
+    local success, error = pcall(function()
+        local startArgs = {item}
+        remoteEvents:WaitForChild("RequestStartDraggingItem"):FireServer(unpack(startArgs))
+        wait(0.1)
 
-    local stopArgs = {item}
-    remoteEvents:WaitForChild("StopDraggingItem"):FireServer(unpack(stopArgs))
-    wait(0.1)
+        local stopArgs = {item}
+        remoteEvents:WaitForChild("StopDraggingItem"):FireServer(unpack(stopArgs))
+        wait(0.1)
+    end)
+    
+    if not success then
+        return false
+    end
+    
+    return true
 end
 
-MicaHub.TeleportItemToFire = function(self, item, callback)
+MicaHub.GetDestinationForItem = function(self, item)
+    for _, itemName in pairs(self.ScrapperList) do
+        if item.Name == itemName then
+            local scrapper = workspace.Map and workspace.Map.Campground and workspace.Map.Campground.Scrapper
+            if scrapper and scrapper.PrimaryPart then
+                return scrapper.PrimaryPart
+            end
+        end
+    end
+    
+    for _, itemName in pairs(self.MainFireList) do
+        if item.Name == itemName then
+            local mainFire = workspace.Map and workspace.Map.Campground and workspace.Map.Campground.MainFire
+            if mainFire and mainFire:FindFirstChild("Center") then
+                return mainFire.Center
+            end
+        end
+    end
+    
+    return nil
+end
+MicaHub.TeleportItemToDestination = function(self, item, callback)
+    if not item or not item.Parent then
+        if callback then callback() end
+        return
+    end
+    
     local itemPart = item:FindFirstChild("Main") or item:FindFirstChild("Coal")
     if not itemPart then
         if callback then callback() end
         return
     end
     
-    local mainFire = workspace.Map and workspace.Map.Campground and workspace.Map.Campground.MainFire
-    if not mainFire or not mainFire:FindFirstChild("Center") then
+    local destinationPart = self:GetDestinationForItem(item)
+    if not destinationPart then
         if callback then callback() end
         return
     end
     
-    local centerPart = mainFire.Center
-    itemPart.CFrame = centerPart.CFrame + Vector3.new(0, 15, 0)
-    wait(0.1)
+    local success, error = pcall(function()
+        itemPart.CFrame = destinationPart.CFrame + Vector3.new(0, 15, 0)
+        wait(0.1)
 
-    local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    local tween = TweenService:Create(itemPart, tweenInfo, {CFrame = centerPart.CFrame})
-    tween:Play()
+        local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+        local tween = TweenService:Create(itemPart, tweenInfo, {CFrame = destinationPart.CFrame})
+        tween:Play()
+        
+        tween.Completed:Connect(function()
+            if callback then callback() end
+        end)
+    end)
     
-    if callback then
-        tween.Completed:Connect(callback)
+    if not success then
+        if callback then callback() end
     end
 end
 
+MicaHub.StartItemTimeout = function(self, item)
+    if self.CurrentItemTimeout then
+        self.CurrentItemTimeout:Disconnect()
+    end
+    
+    self.CurrentItemTimeout = spawn(function()
+        wait(5)
+        if item and item.Parent and self.SearchItemsEnabled then
+            local success = pcall(function()
+                local remoteEvents = ReplicatedStorage:WaitForChild("RemoteEvents")
+                local stopArgs = {item}
+                remoteEvents:WaitForChild("StopDraggingItem"):FireServer(unpack(stopArgs))
+            end)
+            
+            self.ProcessingItem = false
+            if self.SearchItemsEnabled then
+                wait(0.5)
+                self:SearchAndProcessNextItem()
+            end
+        end
+    end)
+end
 MicaHub.ProcessItem = function(self, item)
     if not item or not item.Parent or not self.SearchItemsEnabled or self.ProcessingItem then 
         return 
@@ -180,12 +254,29 @@ MicaHub.ProcessItem = function(self, item)
     self.ProcessingItem = true
     
     spawn(function()
-        self:InteractWithItem(item)
+        local interactionSuccess = self:InteractWithItem(item)
         
+        if not interactionSuccess or not item.Parent then
+            self.ProcessingItem = false
+            if self.SearchItemsEnabled then
+                wait(0.5)
+                self:SearchAndProcessNextItem()
+            end
+            return
+        end
+        
+        local itemDestroyed = false
         local itemDestroyedConnection
         itemDestroyedConnection = item.AncestryChanged:Connect(function()
             if not item.Parent then
-                itemDestroyedConnection:Disconnect()
+                itemDestroyed = true
+                if itemDestroyedConnection then
+                    itemDestroyedConnection:Disconnect()
+                end
+                if self.CurrentItemTimeout then
+                    self.CurrentItemTimeout:Disconnect()
+                    self.CurrentItemTimeout = nil
+                end
                 self.ProcessingItem = false
                 if self.SearchItemsEnabled then
                     wait(0.5)
@@ -194,8 +285,10 @@ MicaHub.ProcessItem = function(self, item)
             end
         end)
         
-        self:TeleportItemToFire(item, function()
-            wait(0.5)
+        self:TeleportItemToDestination(item, function()
+            if not itemDestroyed then
+                self:StartItemTimeout(item)
+            end
         end)
     end)
 end
@@ -220,15 +313,7 @@ MicaHub.HandleNewItem = function(self, item)
         return 
     end
     
-    local isValidItem = false
-    for _, itemType in pairs(self.ItemTypes) do
-        if item.Name == itemType then
-            isValidItem = true
-            break
-        end
-    end
-    
-    if not isValidItem then return end
+    if not self:IsValidItem(item.Name) then return end
     
     self:ProcessItem(item)
 end
@@ -237,6 +322,11 @@ MicaHub.ToggleSearchItems = function(self, state)
     if self.ItemConnection then
         self.ItemConnection:Disconnect()
         self.ItemConnection = nil
+    end
+    
+    if self.CurrentItemTimeout then
+        self.CurrentItemTimeout:Disconnect()
+        self.CurrentItemTimeout = nil
     end
 
     if not state then 
@@ -247,10 +337,14 @@ MicaHub.ToggleSearchItems = function(self, state)
 
     if self.SearchItemsEnabled then return end
 
-    local mainFire = workspace.Map and workspace.Map.Campground and workspace.Map.Campground.MainFire
-    if not mainFire or not mainFire:FindFirstChild("Center") then
-        return
-    end
+    local campground = workspace.Map and workspace.Map.Campground
+    if not campground then return end
+    
+    local mainFire = campground.MainFire
+    local scrapper = campground.Scrapper
+    
+    if not (mainFire and mainFire:FindFirstChild("Center")) then return end
+    if not (scrapper and scrapper.PrimaryPart) then return end
 
     self.SearchItemsEnabled = true
     self.ProcessingItem = false
@@ -275,7 +369,7 @@ MicaHub.SetupButtons = function(self)
     })
 
     self.Window:AddButton({
-        text = "Instant Chests",
+        text = "Instant Interact",
         flag = "button",
         callback = function()
             self:EnableInstantChests()

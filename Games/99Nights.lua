@@ -1,9 +1,14 @@
 local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Mkklz-h/MicaHub/Home/ToraIsMeLibrary/Source.lua",true))()
 local Window = Library:CreateWindow("MicaHub")
+local folder = Window:AddFolder("Other Works")
 
 local WalkSpeedEnabled = false
-local FpsBoosterEnabled = false
 local InstantChestEnabled = false
+local FpsBoosterEnabled = false
+local EvolveBonfireEnabled = false
+local CollectWoodEnabled = false
+
+local CoalConnections = {}
 
 local Registro = getreg()
 local Blocklist = {"kick", "ban"}
@@ -34,7 +39,7 @@ Window:AddButton({
 			local function setWalkSpeed()
 				local player = game.Players.LocalPlayer
 				if player and player.Character and player.Character:FindFirstChild("Humanoid") then
-					player.Character.Humanoid.WalkSpeed = 25
+					player.Character.Humanoid.WalkSpeed = 30
 				end
 			end
 			
@@ -45,16 +50,16 @@ Window:AddButton({
 				setWalkSpeed()
 				
 				character.Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-					if character.Humanoid.WalkSpeed ~= 25 then
-						character.Humanoid.WalkSpeed = 25
+					if character.Humanoid.WalkSpeed ~= 30 then
+						character.Humanoid.WalkSpeed = 30
 					end
 				end)
 			end)
 			
 			if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid") then
 				game.Players.LocalPlayer.Character.Humanoid:GetPropertyChangedSignal("WalkSpeed"):Connect(function()
-					if game.Players.LocalPlayer.Character.Humanoid.WalkSpeed ~= 25 then
-						game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 25
+					if game.Players.LocalPlayer.Character.Humanoid.WalkSpeed ~= 30 then
+						game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 30
 					end
 				end)
 			end
@@ -63,7 +68,7 @@ Window:AddButton({
 })
 
 Window:AddButton({
-	text = "Instant Chests",
+	text = "Instant Chests [MORE]",
 	flag = "button",
 	callback = function()
 		if not InstantChestEnabled then
@@ -198,29 +203,64 @@ Window:AddButton({
 	end
 })
 
-Window:AddToggle({
-	text = "Super Jump",
+folder:AddToggle({
+	text = "Evolve Bonfire",
 	flag = "toggle",
 	callback = function(v)
-		local player = game.Players.LocalPlayer
-		
-		local function setSuperJump(enabled)
-			if player.Character and player.Character:FindFirstChild("Humanoid") then
-				if enabled then
-					player.Character.Humanoid.JumpPower = 230
-				else
-					player.Character.Humanoid.JumpPower = 50
+		if v and not EvolveBonfireEnabled then
+			EvolveBonfireEnabled = true
+			
+			local function processCoalModel(model)
+				if model.Name == "Coal" and model:IsA("Model") then
+					if model.PrimaryPart then
+						local currentPos = model.PrimaryPart.Position
+						model:SetPrimaryPartCFrame(CFrame.new(currentPos.X, currentPos.Y + 10, currentPos.Z))
+					end
 				end
 			end
-		end
-		
-		setSuperJump(v)
-		
-		if v then
-			player.CharacterAdded:Connect(function(character)
-				character:WaitForChild("Humanoid")
-				character.Humanoid.JumpPower = 230
+			
+			local function processItemsFolder(itemsFolder)
+				for _, model in pairs(itemsFolder:GetChildren()) do
+					processCoalModel(model)
+				end
+				
+				CoalConnections[#CoalConnections + 1] = itemsFolder.ChildAdded:Connect(function(child)
+					processCoalModel(child)
+				end)
+			end
+			
+			local itemsFolder = workspace:FindFirstChild("Items")
+			if itemsFolder then
+				processItemsFolder(itemsFolder)
+			end
+			
+			CoalConnections[#CoalConnections + 1] = workspace.ChildAdded:Connect(function(child)
+				if child.Name == "Items" then
+					processItemsFolder(child)
+				end
 			end)
+			
+		elseif not v and EvolveBonfireEnabled then
+			EvolveBonfireEnabled = false
+			
+			for _, connection in pairs(CoalConnections) do
+				connection:Disconnect()
+			end
+			CoalConnections = {}
+		end
+	end
+})
+
+folder:AddToggle({
+	text = "Collect Wood",
+	flag = "toggle",
+	callback = function(v)
+		if v and not CollectWoodEnabled then
+			CollectWoodEnabled = true
+			
+		elseif not v and CollectWoodEnabled then
+			CollectWoodEnabled = false
+			
 		end
 	end
 })
